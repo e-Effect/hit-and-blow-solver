@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Hit & Blow Solver</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="play-panel" aria-labelledby="next-call-label">
+        <div class="topbar">
+          <div>
+            <p class="eyebrow">Hit & Blow Solver</p>
+            <h1>次に言う数字</h1>
+          </div>
+          <button class="icon-button" id="resetButton" type="button" title="リセット" aria-label="リセット">
+            <span aria-hidden="true">↺</span>
+          </button>
+        </div>
+
+        <div class="call-card">
+          <p id="next-call-label" class="call-label">CALL</p>
+          <output id="nextGuess" class="next-guess">----</output>
+          <p id="statusText" class="status-text">解析を開始できます</p>
+        </div>
+
+        <form id="resultForm" class="result-form">
+          <div class="result-pickers">
+            <div class="result-picker" aria-labelledby="hitPickerLabel">
+              <div class="picker-head">
+                <span id="hitPickerLabel">ヒット</span>
+                <output id="hitValue">0</output>
+              </div>
+              <div id="hitButtons" class="count-buttons" role="group" aria-label="ヒット数"></div>
+            </div>
+            <div class="result-picker" aria-labelledby="blowPickerLabel">
+              <div class="picker-head">
+                <span id="blowPickerLabel">ブロー</span>
+                <output id="blowValue">0</output>
+              </div>
+              <div id="blowButtons" class="count-buttons" role="group" aria-label="ブロー数"></div>
+            </div>
+          </div>
+          <button class="primary-button" id="applyButton" type="submit">結果を反映</button>
+        </form>
+
+        <div class="quick-stats" aria-label="解析状況">
+          <div>
+            <span>残り候補</span>
+            <strong id="remainingCount">0</strong>
+          </div>
+          <div>
+            <span>手数</span>
+            <strong id="turnCount">0</strong>
+          </div>
+          <div>
+            <span>期待残り</span>
+            <strong id="expectedCount">-</strong>
+          </div>
+        </div>
+      </section>
+
+      <aside class="side-panel">
+        <section class="settings">
+          <div class="section-title">
+            <h2>設定</h2>
+            <button class="text-button" id="newGameButton" type="button">反映して開始</button>
+          </div>
+          <div class="settings-grid">
+            <label>
+              <span>桁数</span>
+              <select id="lengthSelect">
+                <option value="3">3桁</option>
+                <option value="4" selected>4桁</option>
+              </select>
+            </label>
+            <label class="toggle-row">
+              <span>同じ数字</span>
+              <input id="repeatToggle" type="checkbox" />
+            </label>
+            <label class="toggle-row">
+              <span>先頭0</span>
+              <input id="leadingZeroToggle" type="checkbox" checked />
+            </label>
+          </div>
+        </section>
+
+        <section class="history-section">
+          <div class="section-title">
+            <h2>履歴</h2>
+            <button class="text-button" id="undoButton" type="button">1手戻す</button>
+          </div>
+          <ol id="historyList" class="history-list"></ol>
+        </section>
+
+        <section class="details-section">
+          <div class="section-title">
+            <h2>候補と分析</h2>
+            <button class="text-button" id="toggleDetailsButton" type="button">表示</button>
+          </div>
+          <div id="detailsBody" class="details-body" hidden>
+            <div>
+              <h3>おすすめ上位</h3>
+              <div id="rankingList" class="ranking-list"></div>
+            </div>
+            <div>
+              <h3>残り候補</h3>
+              <div id="candidateList" class="candidate-list"></div>
+            </div>
+          </div>
+        </section>
+      </aside>
+    </main>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
