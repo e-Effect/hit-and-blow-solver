@@ -348,6 +348,7 @@ select {
 .history-list li {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   gap: 10px;
   padding: 11px 12px;
   font-variant-numeric: tabular-nums;
@@ -360,6 +361,29 @@ select {
 .history-list span {
   color: var(--muted);
   font-weight: 700;
+}
+
+.history-edit {
+  display: grid;
+  grid-template-columns: 28px 44px 28px 28px 44px 28px;
+  gap: 5px;
+  align-items: center;
+}
+
+.history-edit button {
+  min-height: 30px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--ink);
+  font-weight: 900;
+  font-size: 0.78rem;
+}
+
+.history-edit .history-value {
+  border-color: rgba(15, 118, 110, 0.35);
+  background: rgba(15, 118, 110, 0.09);
+  color: var(--accent-dark);
 }
 
 .details-body {
