@@ -3,7 +3,6 @@ const digits = "0123456789";
 const state = {
   length: 4,
   allowRepeats: false,
-  allowLeadingZero: true,
   universe: [],
   candidates: [],
   history: [],
@@ -13,7 +12,9 @@ const state = {
   approximate: false,
 };
 
-const exactScoreLimit = 35_000_000;
+const exactScoreLimit = 8_000_000;
+const approximateGuessLimit = 120;
+const approximateCandidateLimit = 700;
 
 const els = {
   nextGuess: document.querySelector("#nextGuess"),
@@ -31,7 +32,6 @@ const els = {
   candidateList: document.querySelector("#candidateList"),
   lengthSelect: document.querySelector("#lengthSelect"),
   repeatToggle: document.querySelector("#repeatToggle"),
-  leadingZeroToggle: document.querySelector("#leadingZeroToggle"),
   resetButton: document.querySelector("#resetButton"),
   newGameButton: document.querySelector("#newGameButton"),
   undoButton: document.querySelector("#undoButton"),
@@ -44,7 +44,7 @@ const selectedResult = {
   blow: 0,
 };
 
-function generateNumbers(length, allowRepeats, allowLeadingZero) {
+function generateNumbers(length, allowRepeats) {
   const results = [];
 
   function walk(prefix) {
@@ -54,7 +54,6 @@ function generateNumbers(length, allowRepeats, allowLeadingZero) {
     }
 
     for (const digit of digits) {
-      if (!allowLeadingZero && prefix.length === 0 && digit === "0") continue;
       if (!allowRepeats && prefix.includes(digit)) continue;
       walk(prefix + digit);
     }
@@ -99,7 +98,7 @@ function resultKey(result) {
   return `${result.hit}-${result.blow}`;
 }
 
-function scoreGuess(guess, candidates) {
+function scoreGuess(guess, candidates, candidateSet = new Set(candidates)) {
   const buckets = new Map();
 
   for (const answer of candidates) {
@@ -111,7 +110,7 @@ function scoreGuess(guess, candidates) {
   const total = candidates.length || 1;
   const expected = sizes.reduce((sum, size) => sum + size * size, 0) / total;
   const worst = Math.max(...sizes);
-  const isCandidate = candidates.includes(guess);
+  const isCandidate = candidateSet.has(guess);
 
   return {
     guess,
@@ -128,6 +127,34 @@ function compareScores(a, b) {
   if (a.isCandidate !== b.isCandidate) return a.isCandidate ? -1 : 1;
   if (a.splitCount !== b.splitCount) return b.splitCount - a.splitCount;
   return a.guess.localeCompare(b.guess);
+}
+
+function randomInt(max) {
+  if (max <= 0) return 0;
+  if (window.crypto?.getRandomValues) {
+    const values = new Uint32Array(1);
+    window.crypto.getRandomValues(values);
+    return values[0] % max;
+  }
+  return Math.floor(Math.random() * max);
+}
+
+function pickRandom(items) {
+  return items[randomInt(items.length)];
+}
+
+function shuffled(items) {
+  const copy = [...items];
+  for (let i = copy.length - 1; i > 0; i -= 1) {
+    const j = randomInt(i + 1);
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
+
+function sampleItems(items, limit) {
+  if (items.length <= limit) return [...items];
+  return shuffled(items).slice(0, limit);
 }
 
 function findBestGuess() {
@@ -154,33 +181,66 @@ function findBestGuess() {
     return;
   }
 
-  if (state.universe.length * state.candidates.length > exactScoreLimit) {
+  const searchCost = state.universe.length * state.candidates.length;
+  if (state.history.length === 0 || searchCost > exactScoreLimit) {
     state.approximate = true;
-    state.currentGuess = pickFastGuess();
+    const approximateScores = scoreApproximateGuesses();
+    state.rankings = approximateScores.slice(0, 8);
     state.currentScore = null;
-    state.rankings = [];
+    state.currentGuess = state.rankings[0]?.guess || pickFastGuess();
     return;
   }
 
-  const scores = state.universe.map((guess) => scoreGuess(guess, state.candidates));
+  const candidateSet = new Set(state.candidates);
+  const scores = state.universe.map((guess) => scoreGuess(guess, state.candidates, candidateSet));
   scores.sort(compareScores);
-  state.rankings = scores.slice(0, 8);
+  state.rankings = pickFromEquivalentTop(scores).concat(scores).filter(uniqueScore).slice(0, 8);
   state.currentScore = state.rankings[0];
   state.currentGuess = state.currentScore.guess;
 }
 
-function pickFastGuess() {
-  const freshDigits = digits.slice(0, state.length);
-  if (
-    freshDigits.length === state.length &&
-    (state.allowLeadingZero || freshDigits[0] !== "0") &&
-    (state.allowRepeats || new Set(freshDigits).size === freshDigits.length)
-  ) {
-    const alreadyUsed = state.history.some((item) => item.guess === freshDigits);
-    if (!alreadyUsed) return freshDigits;
+function uniqueScore(score, index, scores) {
+  return scores.findIndex((item) => item.guess === score.guess) === index;
+}
+
+function pickFromEquivalentTop(scores) {
+  const best = scores[0];
+  if (!best) return [];
+  const equivalent = scores.filter(
+    (score) =>
+      Math.abs(score.expected - best.expected) < 0.000001 &&
+      score.worst === best.worst &&
+      score.isCandidate === best.isCandidate &&
+      score.splitCount === best.splitCount,
+  );
+  return [pickRandom(equivalent)];
+}
+
+function scoreApproximateGuesses() {
+  const candidateSet = new Set(state.candidates);
+  const candidateGuesses = sampleItems(state.candidates, Math.ceil(approximateGuessLimit * 0.65));
+  const outsideGuesses = sampleItems(
+    state.universe.filter((guess) => !candidateSet.has(guess)),
+    approximateGuessLimit - candidateGuesses.length,
+  );
+  let guesses = [...candidateGuesses, ...outsideGuesses];
+
+  if (state.history.length === 0) {
+    guesses = sampleItems(state.universe, approximateGuessLimit);
   }
 
-  return state.candidates[0] || state.universe[0] || "";
+  const sampledCandidates = sampleItems(state.candidates, approximateCandidateLimit);
+  const scores = guesses.map((guess) => scoreGuess(guess, sampledCandidates, candidateSet));
+  scores.sort(compareScores);
+  return pickFromEquivalentTop(scores).concat(scores).filter(uniqueScore);
+}
+
+function pickFastGuess() {
+  const unused = state.universe.filter(
+    (guess) => !state.history.some((item) => item.guess === guess),
+  );
+  const pool = unused.length ? unused : state.universe;
+  return pickRandom(pool) || "";
 }
 
 function setStatus(message, isError = false) {
@@ -287,7 +347,7 @@ function recalculate(message = "") {
   } else if (state.candidates.length === 1) {
     setStatus(`答え候補は ${state.candidates[0]} です`);
   } else if (state.approximate) {
-    setStatus("まずはこの数字で大きく絞ります");
+    setStatus(message || "軽く絞れる数字を選びました");
   } else if (message) {
     setStatus(message);
   } else {
@@ -298,8 +358,7 @@ function recalculate(message = "") {
 function resetGame() {
   state.length = Number(els.lengthSelect.value);
   state.allowRepeats = els.repeatToggle.checked;
-  state.allowLeadingZero = els.leadingZeroToggle.checked;
-  state.universe = generateNumbers(state.length, state.allowRepeats, state.allowLeadingZero);
+  state.universe = generateNumbers(state.length, state.allowRepeats);
   state.candidates = [...state.universe];
   state.history = [];
   selectedResult.hit = 0;
