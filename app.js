@@ -259,11 +259,21 @@ function render() {
   renderResultButtons();
 
   els.historyList.innerHTML = "";
-  for (const item of state.history) {
+  state.history.forEach((item, index) => {
     const li = document.createElement("li");
-    li.innerHTML = `<strong>${item.guess}</strong><span>${item.hit}H ${item.blow}B</span>`;
+    li.innerHTML = `
+      <strong>${item.guess}</strong>
+      <div class="history-edit" aria-label="${item.guess} の結果編集">
+        <button class="history-step" type="button" data-index="${index}" data-type="hit" data-delta="-1" aria-label="ヒットを減らす">−</button>
+        <button class="history-value" type="button" data-index="${index}" data-type="hit" aria-label="ヒットを変更">${item.hit}H</button>
+        <button class="history-step" type="button" data-index="${index}" data-type="hit" data-delta="1" aria-label="ヒットを増やす">＋</button>
+        <button class="history-step" type="button" data-index="${index}" data-type="blow" data-delta="-1" aria-label="ブローを減らす">−</button>
+        <button class="history-value" type="button" data-index="${index}" data-type="blow" aria-label="ブローを変更">${item.blow}B</button>
+        <button class="history-step" type="button" data-index="${index}" data-type="blow" data-delta="1" aria-label="ブローを増やす">＋</button>
+      </div>
+    `;
     els.historyList.append(li);
-  }
+  });
   if (state.history.length === 0) {
     const li = document.createElement("li");
     li.innerHTML = `<span>まだ履歴はありません</span>`;
@@ -397,6 +407,11 @@ function applyResult(event) {
 
 function undoLast() {
   state.history.pop();
+  rebuildCandidatesFromHistory();
+  recalculate(state.history.length ? "1手戻しました" : "最初に戻しました");
+}
+
+function rebuildCandidatesFromHistory() {
   state.candidates = [...state.universe];
   for (const item of state.history) {
     state.candidates = state.candidates.filter((candidate) => {
@@ -404,13 +419,13 @@ function undoLast() {
       return result.hit === item.hit && result.blow === item.blow;
     });
   }
-  recalculate(state.history.length ? "1手戻しました" : "最初に戻しました");
 }
 
 els.resultForm.addEventListener("submit", applyResult);
 els.resetButton.addEventListener("click", resetGame);
 els.newGameButton.addEventListener("click", resetGame);
 els.undoButton.addEventListener("click", undoLast);
+els.historyList.addEventListener("click", handleHistoryEdit);
 els.hitButtons.addEventListener("click", handleCountButtonClick);
 els.blowButtons.addEventListener("click", handleCountButtonClick);
 els.toggleDetailsButton.addEventListener("click", () => {
@@ -442,4 +457,29 @@ function handleCountButtonClick(event) {
   setStatus(
     state.candidates.length === 1 ? `答え候補は ${state.candidates[0]} です` : "結果を選んで反映できます",
   );
+}
+
+function handleHistoryEdit(event) {
+  const button = event.target.closest("button[data-index][data-type]");
+  if (!button) return;
+
+  const index = Number(button.dataset.index);
+  const item = state.history[index];
+  if (!item) return;
+
+  const type = button.dataset.type;
+  const otherType = type === "hit" ? "blow" : "hit";
+  const current = item[type];
+  const delta = button.dataset.delta ? Number(button.dataset.delta) : 1;
+  let next = button.classList.contains("history-value") ? current + 1 : current + delta;
+
+  if (next < 0) next = state.length;
+  if (next > state.length) next = 0;
+  if (next + item[otherType] > state.length) {
+    item[otherType] = state.length - next;
+  }
+
+  item[type] = next;
+  rebuildCandidatesFromHistory();
+  recalculate("履歴を修正して再計算しました");
 }
